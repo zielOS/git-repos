@@ -1,0 +1,56 @@
+#!/bin/bash
+
+cd git
+sudo rm -R Hyprland
+git clone https://github.com/hyprwm/Hyprland.git
+cd Hyprland
+git submodule update --init
+sed -i -e '/^release:/{n;s/-D/-DCMAKE_SKIP_RPATH=ON -D/}' Makefile
+cd subprojects/wlroots
+patch -Np1 < "$HOME/git/Hyprland/nix/patches/wlroots-nvidia.patch"
+
+# Build wlroots
+cd && cd $HOME/git/Hyprland/subprojects/wlroots
+meson build/ --prefix="/tmpwlr" --buildtype=release
+ninja -C build/
+mkdir -p "tmpwlr"
+ninja -C build/ install
+
+# Build udis86
+cd && cd $HOME/git/Hyprland/subprojects/udis86
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G Ninja
+cmake --build build --config Release --target all
+
+
+# Build hyprland
+cd && cd $HOME/git/Hyprland
+make protocols
+make release
+make -C hyprctl all
+
+# Install hyprland headers
+cd && cd $HOME/git/Hyprland/src
+find . -name '*.hpp' -exec install -Dm644 {} "/usr/include/hyprland/{}" \;
+
+# Fix $srcdir reference
+sed -i -e "/ICONDIR/ s,$srcdir/tmpwlr,/usr," "$HOME/git/Hyprland/subprojects/wlroots/build/include/config.h"
+
+# Install wlroots headers
+cd && cd "$HOME/git/Hyprland/subprojects/wlroots/include"
+find . -name '*.h' -exec install -Dm644 {} "$pkgdir/usr/include/hyprland/wlroots/{}" \;
+cd && cd "$HOME/git/Hyprland/subprojects/wlroots/build/include"
+find . -name '*.h' -exec install -Dm644 {} "$pkgdir/usr/include/hyprland/wlroots/{}" \;
+
+# Install hyprland
+cd && cd $HOME/git/Hyprland/build
+cmake -DCMAKE_INSTALL_PREFIX=/usr ..
+cd && cd $HOME/git/Hyprland
+install -Dm755 -t "/usr/bin" build/Hyprland
+install -Dm755 -t "/usr/bin" hyprctl/hyprctl
+install -Dm644 -t "/usr/include/hyprland/protocols" protocols/*-protocol.h
+install -Dm644 -t "/usr/share/hyprland" assets/*.png
+install -Dm644 -t "/usr/share/hyprland" example/hyprland.conf
+install -Dm644 -t "/usr/share/licenses/hyprland" LICENSE
+install -Dm644 -t "/usr/share/pkgconfig" build/hyprland.pc
+install -Dm644 -t "/usr/share/wayland-sessions" example/hyprland.desktop
+install -Dm755 -t "/usr/lib" "$srcdir/tmpwlr/lib/libwlroots.so.12032"

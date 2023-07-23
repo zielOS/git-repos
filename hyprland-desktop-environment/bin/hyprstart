@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+# Kill already running process
+_ps=(waybar swayidle swhks polkit-gnome-authentication-agent-1)
+for _prs in "${_ps[@]}"; do
+	if [[ `pidof ${_prs}` ]]; then
+		killall -9 ${_prs}
+	fi
+done
+
+# Idle
+swayidle -w \
+    timeout 600 'gtklock' \
+    timeout 800 'swaymsg "output * dpms off"' \
+    resume 'swaymsg "output * dpms on"' \
+    before-sleep 'gtklock' &
+
+# hotkey daemon
+swhks & 
+pkexec swhkd -c $HOME/.config/swhkd/swhkdrc &
+
+# wallpaper 
+swaybg --output '*' --mode fill --image ~/.config/wallpapers/trigonometry.png & &
+
+# polkit 
+/usr/libexec/polkit-gnome-authentication-agent-1 &
+
+# Start Apps
+ckb-next &
+QT_QPA_PLATFORM=xcb insync start &
+
+# gammastep
+gammastep -l 48.1:11.6 -b 0.9:0.9 -t 5700:5700 &
+
+# theme
+THEME='Catppuccin-Mocha-Standard-Lavender-dark'
+ICONS='Papirus-Dark'
+FONT='JetBrainsMono Nerd Font 13'
+CURSOR='Catppuccin-Mocha-Lavender-Cursors'
+
+SCHEMA='gsettings set org.gnome.desktop.interface'
+
+apply_themes () {
+	${SCHEMA} gtk-theme "$THEME" &
+	${SCHEMA} icon-theme "$ICONS" &
+	${SCHEMA} cursor-theme "$CURSOR" &
+	${SCHEMA} font-name "$FONT" &
+}
+
+apply_themes
